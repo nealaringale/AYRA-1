@@ -25,7 +25,7 @@ It uses the laptop webcam to detect a face, checks whether the eyes are visible,
 - Python 3.9+
 - Working webcam
 
-Python 3.14 is supported by the current setup because AYRA-1 only requires OpenCV.
+AYRA-1 pins **OpenCV 4.13.0.92** because newer OpenCV 5.x wheels have had a packaging issue where the Haar-cascade XML files may be missing from `cv2/data`. Pinning the known-good 4.13.0.92 wheel keeps the project reproducible.
 
 ## Installation
 
@@ -34,6 +34,21 @@ Open PowerShell in the **AYRA-1 repository root** and run:
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+```
+
+If you already installed OpenCV 5.x, the requirements command will replace it with the pinned version.
+
+To verify:
+
+```powershell
+python -c "import cv2; print(cv2.__version__); print(cv2.data.haarcascades)"
+```
+
+You should see:
+
+```text
+4.13.0
+...cv2data...
 ```
 
 ## Run
@@ -68,13 +83,7 @@ Edit `eye_detection\eye_buzzer.py`.
 CLOSED_TIME = 1.5
 ```
 
-Example:
-
-```python
-CLOSED_TIME = 2.0
-```
-
-Use a larger value when normal blinks or brief eye-closure events are triggering the alarm.
+Increase this value when you want a longer delay before the alarm.
 
 ### Webcam
 
@@ -88,7 +97,7 @@ Try `1` or `2` for another camera.
 
 ## Detection flow
 
-```
+```text
 Laptop Webcam
       |
       v
@@ -110,13 +119,40 @@ Windows winsound Alarm
 
 You are running an old Raspberry Pi version of the project.
 
-Download/clone the latest AYRA-1 repository and run the current file:
-
-```powershell
-python eye_detection\eye_buzzer.py
-```
+Download/clone the latest AYRA-1 repository and make sure your local `eye_detection\eye_buzzer.py` is the current version.
 
 The current version does **not** import `gpiozero`.
+
+### Haar-cascade error
+
+Example:
+
+```text
+Can't open file: ...cv2\data\haarcascade_frontalface_default.xml
+RuntimeError: Could not load OpenCV face detector.
+```
+
+This usually means OpenCV 5.x is installed without the expected cascade files.
+
+From the AYRA-1 root, run:
+
+```powershell
+python -m pip uninstall opencv-python -y
+python -m pip install -r requirements.txt --force-reinstall
+```
+
+Then verify:
+
+```powershell
+python -c "import cv2, os; p=cv2.data.haarcascades; print(cv2.__version__); print(os.path.exists(os.path.join(p, 'haarcascade_frontalface_default.xml')))"
+```
+
+The final output should be:
+
+```text
+4.13.0
+True
+```
 
 ### Camera does not open
 
