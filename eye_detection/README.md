@@ -1,36 +1,54 @@
 # AYRA-1 Eye Closure Detection
 
-Laptop-only eye closure detection module.
+Laptop-only eye closure detection for Windows.
 
 ## Features
 
 - Uses the laptop webcam
-- MediaPipe Face Mesh eye landmarks
-- Eye Aspect Ratio (EAR) based detection
-- Ignores normal short blinks
-- Plays an alarm through laptop speakers after prolonged eye closure
+- OpenCV face and eye detection
+- Detects prolonged eye closure using a time threshold
+- Plays a repeating Windows beep after prolonged eye closure
+- No pygame
+- No MediaPipe
+- No Raspberry Pi or GPIO hardware
 - Press **Q** to quit
 
-## Run
+## Python compatibility
+
+This version is designed for Windows and Python 3.14 using the current OpenCV package.
+
+## Install
 
 From the repository root:
 
-```bash
-pip install -r requirements.txt
-python eye_detection/eye_buzzer.py
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-Place an `alarm.wav` file inside this directory before running.
+## Run
+
+```powershell
+python eye_detection\eye_buzzer.py
+```
+
+No `alarm.wav` file is required. AYRA-1 uses the built-in Windows `winsound` module.
 
 ## Configuration
 
-Edit `eye_buzzer.py`:
+Open `eye_detection/eye_buzzer.py` and adjust:
 
 ```python
-EAR_THRESHOLD = 0.20
 CLOSED_TIME = 1.5
 ```
 
-Lower the EAR threshold if it triggers too easily; raise it if closed eyes are not detected reliably.
+Increase this value if you want to tolerate longer eye closures before the alarm starts.
 
-> This is a prototype and is not a safety-certified driver monitoring system.
+## Detection flow
+
+```
+Webcam -> OpenCV Face Detection -> OpenCV Eye Detection
+       -> Eyes not detected continuously -> Windows alarm
+```
+
+> Prototype only; this is not a safety-certified driver monitoring system.
