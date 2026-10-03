@@ -1,3 +1,5 @@
+from pathlib import Path
+import argparse
 import cv2
 import threading
 import time
@@ -8,32 +10,25 @@ import winsound
 # Windows + Python + OpenCV
 # ============================================================
 
-# Time eyes must remain undetected before the alarm starts.
-CLOSED_TIME = 1.5
+BASE_DIR = Path(__file__).resolve().parents[1]
+MODEL_DIR = BASE_DIR / "models"
 
-# Default laptop webcam.
-CAMERA_INDEX = 0
+FACE_CASCADE_FILE = MODEL_DIR / "haarcascade_frontalface_default.xml"
+EYE_CASCADE_FILE = MODEL_DIR / "haarcascade_eye_tree_eyeglasses.xml"
 
-# Camera resolution.
+DEFAULT_CLOSED_TIME = 1.5
+DEFAULT_CAMERA_INDEX = 0
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
-# OpenCV Haar-cascade settings.
 FACE_SCALE_FACTOR = 1.1
 FACE_MIN_NEIGHBORS = 5
 EYE_SCALE_FACTOR = 1.1
 EYE_MIN_NEIGHBORS = 5
 
-FACE_CASCADE_FILE = (
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-)
-EYE_CASCADE_FILE = (
-    cv2.data.haarcascades + "haarcascade_eye_tree_eyeglasses.xml"
-)
-
 
 class AlarmController:
-    """Play a repeating Windows beep without blocking the camera loop."""
+    """Play a repeating Windows alarm without blocking video processing."""
 
     def __init__(self):
         self.active = False
@@ -48,7 +43,6 @@ class AlarmController:
             except RuntimeError:
                 winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
 
-            # Small gap between beeps.
             if self._stop_event.wait(0.15):
                 break
 
@@ -83,38 +77,104 @@ class AlarmController:
         self.stop()
 
 
-def load_detector(path, name):
-    detector = cv2.CascadeClassifier(path)
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="AYRA-1 laptop eye-closure detection"
+    )
+    parser.add_argument(
+        "--camera",
+        type=int,
+        default=DEFAULT_CAMERA_INDEX,
+        help="Webcam index (default: 0)",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=DEFAULT_CLOSED_TIME,
+        help="Seconds before the alarm starts (default: 1.5)",
+    )
+    args = parser.parse_args()
+
+    if args.delay <= 0:
+        parser.error("--delay must be greater than 0")
+
+    if args.camera < 0:
+        parser.error("--camera must be 0 or greater")
+
+    return args
+
+
+def load_detector(path: Path, name: str):
+    if not path.exists():
+        raise FileNotFoundError(
+            f"AYRA-1 model file is missing: {path}\n"
+            "Make sure you downloaded/cloned the complete repository."
+        )
+
+    detector = cv2.CascadeClassifier(str(path))
 
     if detector.empty():
-        raise RuntimeError(f"Could not load OpenCV {name} detector.")
+        raise RuntimeError(
+            f"OpenCV could not load the AYRA-1 {name} detector:\n{path}"
+        )
 
     return detector
 
 
-def main():
-    face_cascade = load_detector(FACE_CASCADE_FILE, "face")
-    eye_cascade = load_detector(EYE_CASCADE_FILE, "eye")
+def open_camera(camera_index: int):
+    # DirectShow usually gives better behavior on Windows.
+    camera = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
 
-    camera = cv2.VideoCapture(CAMERA_INDEX)
+    if not camera.isOpened():
+        camera.release()
+        camera = cv2.VideoCapture(camera_index)
 
     if not camera.isOpened():
         raise RuntimeError(
-            "Could not open webcam. Check Windows camera permissions "
-            "and make sure another app is not using the camera."
+            f"Could not open webcam {camera_index}.\n"
+            "Check Windows camera permission and close any other app "
+            "using the webcam."
         )
 
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
 
+    return camera
+
+
+def draw_text(frame, text, position, alarm_active=False, scale=0.75):
+    color = (0, 0, 255) if alarm_active else (255, 255, 255)
+
+    cv2.putText(
+        frame,
+        text,
+        position,
+        cv2.FONT_HERSHEY_SIMPLEX,
+        scale,
+        color,
+        2,
+        cv2.LINE_AA,
+    )
+
+
+def main():
+    args = parse_args()
+
+    face_cascade = load_detector(FACE_CASCADE_FILE, "face")
+    eye_cascade = load_detector(EYE_CASCADE_FILE, "eye")
+
+    camera = open_camera(args.camera)
     alarm = AlarmController()
+
     closed_start_time = None
 
     print("===================================")
     print("        AYRA-1 EYE DETECTION")
     print("===================================")
-    print(f"Eye closure alarm delay: {CLOSED_TIME:.1f} seconds")
-    print("Camera started. Press Q in the camera window to exit.")
+    print(f"Camera index : {args.camera}")
+    print(f"Alarm delay  : {args.delay:.1f} seconds")
+    print("Camera started.")
+    print("Press Q in the camera window to exit.")
     print("")
 
     try:
@@ -122,10 +182,13 @@ def main():
             success, frame = camera.read()
 
             if not success:
-                print("Warning: could not read a webcam frame.")
+                draw_text(frame, "CAMERA FRAME ERROR", (20, 40), True)
+                cv2.imshow("AYRA-1 | Eye Closure Detection", frame)
+
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
                 continue
 
-            # Mirror the camera image like a normal webcam preview.
             frame = cv2.flip(frame, 1)
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -139,7 +202,6 @@ def main():
             status = "NO FACE"
 
             if len(faces) > 0:
-                # Use the largest detected face.
                 x, y, w, h = max(
                     faces,
                     key=lambda box: box[2] * box[3],
@@ -153,8 +215,8 @@ def main():
                     2,
                 )
 
-                # Eyes are normally found in the upper 60% of the face.
-                eye_region_height = int(h * 0.60)
+                # Search only the upper portion of the detected face.
+                eye_region_height = max(1, int(h * 0.60))
                 eye_gray = gray[y:y + eye_region_height, x:x + w]
 
                 eyes = eye_cascade.detectMultiScale(
@@ -164,7 +226,14 @@ def main():
                     minSize=(20, 20),
                 )
 
-                for ex, ey, ew, eh in eyes[:4]:
+                # Keep only plausible eye detections in the upper face.
+                valid_eyes = []
+                for ex, ey, ew, eh in eyes:
+                    eye_center_y = ey + eh / 2
+                    if eye_center_y < eye_region_height * 0.90:
+                        valid_eyes.append((ex, ey, ew, eh))
+
+                for ex, ey, ew, eh in valid_eyes[:4]:
                     cv2.rectangle(
                         frame,
                         (x + ex, y + ey),
@@ -173,13 +242,11 @@ def main():
                         2,
                     )
 
-                if len(eyes) > 0:
-                    # Eye detected -> eyes are considered open.
+                if valid_eyes:
                     status = "EYES OPEN"
                     closed_start_time = None
                     alarm.stop()
                 else:
-                    # No eye detected while a face is visible.
                     if closed_start_time is None:
                         closed_start_time = time.monotonic()
 
@@ -187,37 +254,39 @@ def main():
                         time.monotonic() - closed_start_time
                     )
 
-                    status = f"EYES CLOSED: {closed_duration:.1f}s"
+                    status = f"EYES CLOSED?: {closed_duration:.1f}s"
 
-                    if closed_duration >= CLOSED_TIME:
+                    if closed_duration >= args.delay:
                         status = "EYES CLOSED - WAKE UP!"
                         alarm.start()
-
             else:
-                # Do not treat a missing face as closed eyes.
+                # A missing face is not treated as closed eyes.
                 closed_start_time = None
                 alarm.stop()
 
             height, width = frame.shape[:2]
 
-            cv2.putText(
+            draw_text(
                 frame,
                 status,
                 (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 0, 255) if alarm.active else (255, 255, 255),
-                2,
+                alarm_active=alarm.active,
             )
 
-            cv2.putText(
+            draw_text(
+                frame,
+                f"Alarm delay: {args.delay:.1f}s",
+                (20, 72),
+                alarm_active=False,
+                scale=0.55,
+            )
+
+            draw_text(
                 frame,
                 "Q = Quit",
                 (20, height - 20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (255, 255, 255),
-                1,
+                alarm_active=False,
+                scale=0.55,
             )
 
             if alarm.active:
@@ -229,6 +298,7 @@ def main():
                     1.5,
                     (0, 0, 255),
                     4,
+                    cv2.LINE_AA,
                 )
 
             cv2.imshow("AYRA-1 | Eye Closure Detection", frame)
