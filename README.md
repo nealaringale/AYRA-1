@@ -1,18 +1,27 @@
 # AYRA-1
 
-AYRA-1 is a laptop-based computer-vision project for detecting prolonged eye closure and triggering an audible wake-up alarm.
+**AYRA-1** is a standalone laptop computer-vision project for detecting prolonged eye closure and triggering an audible wake-up alarm.
 
-## Eye Closure Detection
+## Current project
 
-The current implementation is designed for Windows and uses OpenCV for face/eye detection plus Python's built-in `winsound` module for the alarm.
+### Eye Closure Detection
 
-### Requirements
+Location:
 
-- Windows laptop/PC
-- Python 3.14
-- Working webcam
+```text
+eye_detection/eye_buzzer.py
+```
+
+Technology:
+
+- Python
+- OpenCV
+- Windows `winsound`
+- Laptop webcam
 
 ### Install
+
+From the repository root:
 
 ```powershell
 python -m pip install --upgrade pip
@@ -25,14 +34,51 @@ python -m pip install -r requirements.txt
 python eye_detection\eye_buzzer.py
 ```
 
-Press **Q** to exit.
+Or double-click:
 
-### Detection flow
-
-```
-Webcam -> OpenCV Face Detection -> Eye Detection -> Closure Timer -> Windows Beep
+```text
+run_ayra1.bat
 ```
 
-No Raspberry Pi, GPIO, pygame, MediaPipe, or external buzzer hardware is required.
+Press **Q** to exit the camera window.
 
-> Prototype only; not a safety-certified driver monitoring system.
+## Project structure
+
+```text
+AYRA-1/
+|-- eye_detection/
+|   |-- eye_buzzer.py
+|   |-- README.md
+|-- requirements.txt
+|-- run_ayra1.bat
+|-- README.md
+```
+
+## Detection flow
+
+```text
+Webcam
+  -> OpenCV Face Detection
+  -> OpenCV Eye Detection
+  -> Closure Timer
+  -> Windows Alarm
+```
+
+## Hardware
+
+This version is designed for a **normal Windows laptop**.
+
+It does **not** require:
+
+- Raspberry Pi
+- GPIO
+- External buzzer
+- Arduino
+- ESP32
+- pygame
+- MediaPipe
+- `alarm.wav`
+
+## Important
+
+AYRA-1 is a prototype for learning and experimentation. It is not a safety-certified driver monitoring system.
