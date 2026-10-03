@@ -15,7 +15,7 @@ eye_detection/eye_buzzer.py
 Technology:
 
 - Python
-- OpenCV
+- OpenCV 4.13.0.92
 - Windows `winsound`
 - Laptop webcam
 
@@ -78,6 +78,10 @@ It does **not** require:
 - pygame
 - MediaPipe
 - `alarm.wav`
+
+## OpenCV version
+
+AYRA-1 pins OpenCV **4.13.0.92** so the Haar-cascade XML files are available consistently for this project.
 
 ## Important
 
