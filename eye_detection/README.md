@@ -2,21 +2,24 @@
 
 AYRA-1 is a **standalone Windows laptop** eye-closure detection prototype.
 
-It uses the laptop webcam to detect a face, checks whether the eyes are visible, and starts a repeating Windows beep when the eyes have remained undetected for the configured time.
+The project deliberately keeps the required setup small and self-contained. The OpenCV Haar-cascade models are stored inside the repository, so AYRA-1 does **not** depend on `cv2.data` containing those files.
 
 ## Features
 
-- Laptop webcam only
+- Laptop webcam
 - Windows + Python
-- OpenCV face and eye detection
-- Ignores normal short blinks by using a time threshold
-- Repeating alarm using Python's built-in `winsound`
+- OpenCV face detection
+- OpenCV eye detection
+- Configurable eye-closure delay
+- Repeating Windows alarm using built-in `winsound`
 - No pygame
 - No MediaPipe
 - No Raspberry Pi
 - No GPIO
 - No external buzzer
-- No `alarm.wav` file required
+- No audio file required
+- Bundled detector models
+- Command-line camera and delay options
 - Press **Q** to quit
 
 ## Requirements
@@ -25,75 +28,101 @@ It uses the laptop webcam to detect a face, checks whether the eyes are visible,
 - Python 3.9+
 - Working webcam
 
-AYRA-1 pins **OpenCV 4.13.0.92** because newer OpenCV 5.x wheels have had a packaging issue where the Haar-cascade XML files may be missing from `cv2/data`. Pinning the known-good 4.13.0.92 wheel keeps the project reproducible.
+AYRA-1 uses OpenCV 4.13.0.92, which is available as a Windows x86-64 wheel using the stable CPython ABI.
 
-## Installation
+## Recommended installation
 
-Open PowerShell in the **AYRA-1 repository root** and run:
+Use the included installer so AYRA-1 gets its own virtual environment instead of modifying your global Python installation.
 
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-If you already installed OpenCV 5.x, the requirements command will replace it with the pinned version.
-
-To verify:
-
-```powershell
-python -c "import cv2; print(cv2.__version__); print(cv2.data.haarcascades)"
-```
-
-You should see:
+From the repository root, double-click:
 
 ```text
-4.13.0
-...cv2data...
+install_windows.bat
 ```
+
+Or run:
+
+```powershell
+.\install_windows.bat
+```
+
+The installer creates:
+
+```text
+.venv\
+```
+
+and installs the exact dependency from `requirements.txt`.
 
 ## Run
 
+After installation:
+
 ```powershell
-python eye_detection\eye_buzzer.py
+.\run_ayra1.bat
 ```
 
-Or double-click:
+Or:
 
-```text
-run_ayra1.bat
+```powershell
+.\.venv\Scripts\python.exe eye_detection\eye_buzzer.py
 ```
 
 ## Test the alarm
 
 1. Start AYRA-1.
 2. Keep your face in the webcam view.
-3. Close both eyes.
+3. Close your eyes.
 4. Keep them closed for about **1.5 seconds**.
-5. The status will change to `EYES CLOSED - WAKE UP!`.
-6. A repeating Windows beep will start.
+5. The status changes to `EYES CLOSED - WAKE UP!`.
+6. A repeating Windows beep starts.
 7. Open your eyes and the alarm stops.
 
 ## Configuration
 
-Edit `eye_detection\eye_buzzer.py`.
+The default settings are:
 
-### Alarm delay
-
-```python
-CLOSED_TIME = 1.5
+```text
+Camera index: 0
+Alarm delay : 1.5 seconds
 ```
 
-Increase this value when you want a longer delay before the alarm.
+### Use another webcam
 
-### Webcam
-
-If your laptop has multiple cameras:
-
-```python
-CAMERA_INDEX = 0
+```powershell
+.\.venv\Scripts\python.exe eye_detection\eye_buzzer.py --camera 1
 ```
 
-Try `1` or `2` for another camera.
+### Change the alarm delay
+
+For a 2-second delay:
+
+```powershell
+.\.venv\Scripts\python.exe eye_detection\eye_buzzer.py --delay 2
+```
+
+You can combine them:
+
+```powershell
+.\.venv\Scripts\python.exe eye_detection\eye_buzzer.py --camera 1 --delay 2
+```
+
+## Project structure
+
+```text
+AYRA-1/
+|-- eye_detection/
+|   |-- eye_buzzer.py
+|   |-- README.md
+|-- models/
+|   |-- haarcascade_frontalface_default.xml
+|   |-- haarcascade_eye_tree_eyeglasses.xml
+|-- requirements.txt
+|-- install_windows.bat
+|-- run_ayra1.bat
+|-- .gitignore
+|-- README.md
+```
 
 ## Detection flow
 
@@ -107,7 +136,7 @@ OpenCV Face Detection
 OpenCV Eye Detection
       |
       v
-Eyes not detected for CLOSED_TIME
+Eye-not-detected Timer
       |
       v
 Windows winsound Alarm
@@ -117,41 +146,48 @@ Windows winsound Alarm
 
 ### `ModuleNotFoundError: No module named 'gpiozero'`
 
-You are running an old Raspberry Pi version of the project.
+That message comes from the old Raspberry Pi version.
 
-Download/clone the latest AYRA-1 repository and make sure your local `eye_detection\eye_buzzer.py` is the current version.
+Make sure you are using the current AYRA-1 `eye_detection\eye_buzzer.py`. The current version does **not** import `gpiozero`.
 
-The current version does **not** import `gpiozero`.
+### Haar-cascade file error
 
-### Haar-cascade error
-
-Example:
+The current project stores the detector XML files under:
 
 ```text
-Can't open file: ...cv2\data\haarcascade_frontalface_default.xml
-RuntimeError: Could not load OpenCV face detector.
+models/
 ```
 
-This usually means OpenCV 5.x is installed without the expected cascade files.
+Therefore it no longer depends on:
 
-From the AYRA-1 root, run:
+```text
+cv2.data.haarcascades
+```
+
+### OpenCV version is wrong
+
+The project requires:
+
+```text
+opencv-python==4.13.0.92
+```
+
+Run the installer again:
 
 ```powershell
-python -m pip uninstall opencv-python -y
-python -m pip install -r requirements.txt --force-reinstall
+.\install_windows.bat
 ```
 
-Then verify:
+Then check:
 
 ```powershell
-python -c "import cv2, os; p=cv2.data.haarcascades; print(cv2.__version__); print(os.path.exists(os.path.join(p, 'haarcascade_frontalface_default.xml')))"
+.\.venv\Scripts\python.exe -c "import cv2; print(cv2.__version__)"
 ```
 
-The final output should be:
+Expected:
 
 ```text
 4.13.0
-True
 ```
 
 ### Camera does not open
@@ -160,12 +196,19 @@ Check Windows:
 
 **Settings -> Privacy & security -> Camera**
 
-Make sure camera access and desktop-app camera access are enabled.
+Enable camera access and desktop-app camera access.
 
-Also close apps such as Teams, Zoom, Discord, or another camera application that may be using the webcam.
+Also close Teams, Zoom, Discord, browsers, or other software currently using the webcam.
 
 ### Detection is poor
 
-Good front-facing lighting improves Haar-cascade detection. Keep your face reasonably centered and avoid very dark rooms.
+Haar-cascade detection works best with:
 
-> Prototype only. This is not a safety-certified driver-monitoring system and should not be relied on while driving.
+- Face looking generally toward the camera
+- Good front lighting
+- Reasonably clear webcam image
+- Minimal extreme head rotation
+
+This is a prototype, so false detections are possible.
+
+> AYRA-1 is for learning and experimentation. It is not a safety-certified driver-monitoring system and should not be relied upon while driving.
